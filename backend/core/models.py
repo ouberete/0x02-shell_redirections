@@ -2,6 +2,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from .validators import validate_file_size, validate_file_extension
 
 # =============================================================================
 # 1. USER AND AUTHENTICATION MODELS
@@ -184,3 +185,53 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"Paiement de {self.amount} pour la facture #{self.invoice.id}"
+
+# =============================================================================
+# 6. DOCUMENT MANAGEMENT MODELS
+# =============================================================================
+
+def user_directory_path(instance, filename):
+    """
+    Génère le chemin de fichier pour les nouveaux documents.
+    Ex: media/user_documents/user_12/cv.pdf
+    """
+    return f'user_documents/user_{instance.user.id}/{filename}'
+
+class Document(models.Model):
+    """ Modèle pour la gestion des documents et images """
+    class DocumentType(models.TextChoices):
+        # Élèves
+        PROFILE_PHOTO = "PROFILE_PHOTO", _("Photo de profil")
+        BIRTH_CERTIFICATE = "BIRTH_CERTIFICATE", _("Acte de naissance")
+        TRANSCRIPT = "TRANSCRIPT", _("Bulletin/Relevé ancien")
+        ADMISSION_FOLDER = "ADMISSION_FOLDER", _("Dossier d'admission")
+        # Professeurs & Staff
+        CV = "CV", _("Curriculum Vitae (CV)")
+        DIPLOMA = "DIPLOMA", _("Diplôme")
+        ID_CARD = "ID_CARD", _("CNI / Passeport")
+        CONTRACT = "CONTRACT", _("Contrat de travail")
+        PROOF_OF_EMPLOYMENT = "PROOF_OF_EMPLOYMENT", _("Justificatif professionnel")
+        OTHER = "OTHER", _("Autre")
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='documents', verbose_name=_("Utilisateur"))
+    document_type = models.CharField(
+        _("Type de document"),
+        max_length=50,
+        choices=DocumentType.choices,
+        default=DocumentType.OTHER
+    )
+    description = models.CharField(_("Description"), max_length=255, blank=True)
+    file = models.FileField(
+        _("Fichier"),
+        upload_to=user_directory_path,
+        validators=[validate_file_size, validate_file_extension]
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.get_document_type_display()} pour {self.user.get_full_name()}"
+
+    @property
+    def filename(self):
+        import os
+        return os.path.basename(self.file.name)

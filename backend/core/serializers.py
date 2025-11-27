@@ -1,6 +1,6 @@
 # backend/core/serializers.py
 from rest_framework import serializers
-from .models import User, Student, Level, SchoolClass, AcademicYear, Teacher
+from .models import User, Student, Level, SchoolClass, AcademicYear, Teacher, Document
 
 # =============================================================================
 # USER SERIALIZERS
@@ -101,3 +101,34 @@ class ParentSerializer(UserSerializer):
 
     class Meta(UserSerializer.Meta):
         fields = UserSerializer.Meta.fields + ('children',)
+
+# =============================================================================
+# DOCUMENT MANAGEMENT SERIALIZER
+# =============================================================================
+
+class DocumentSerializer(serializers.ModelSerializer):
+    """ Serializer pour le modèle Document """
+    user_full_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    document_type_display = serializers.CharField(source='get_document_type_display', read_only=True)
+    file_url = serializers.FileField(source='file', read_only=True)
+    filename = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = Document
+        fields = (
+            'id', 'user', 'user_full_name', 'document_type', 'document_type_display',
+            'description', 'file', 'file_url', 'filename', 'uploaded_at'
+        )
+        # Le champ 'user' est en écriture seule pour l'upload,
+        # mais son nom complet est affiché en lecture.
+        extra_kwargs = {
+            'file': {'write_only': True},
+        }
+
+    def create(self, validated_data):
+        # Assigner l'utilisateur connecté à l'instance du document si non fourni
+        if 'user' not in validated_data:
+             request = self.context.get('request', None)
+             if request and hasattr(request, 'user'):
+                 validated_data['user'] = request.user
+        return super().create(validated_data)
